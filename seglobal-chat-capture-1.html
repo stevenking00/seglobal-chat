@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>S.E. Global — Chat Capture</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #f0e6c8;
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 560px;
+    }
+
+    .brand {
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #c9a84c;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #f0e6c8;
+      margin-bottom: 32px;
+    }
+
+    .log {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 180px;
+      max-height: 280px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .log-empty {
+      color: #444;
+      font-size: 13px;
+      margin: auto;
+      text-align: center;
+    }
+
+    .log-entry {
+      background: #1a1a1a;
+      border-left: 3px solid #c9a84c;
+      padding: 10px 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #d4c4a0;
+      line-height: 1.5;
+    }
+
+    .log-entry .meta {
+      font-size: 10px;
+      color: #555;
+      margin-top: 4px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 12px 16px;
+      color: #f0e6c8;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: #c9a84c;
+    }
+
+    input[type="text"]::placeholder {
+      color: #444;
+    }
+
+    button {
+      background: #c9a84c;
+      color: #0a0a0a;
+      border: none;
+      border-radius: 6px;
+      padding: 12px 22px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #e0bf6a; }
+    button:disabled { background: #444; cursor: not-allowed; }
+
+    .status {
+      margin-top: 14px;
+      font-size: 12px;
+      color: #555;
+      min-height: 18px;
+    }
+
+    .status.ok { color: #6dbf7e; }
+    .status.err { color: #e05c5c; }
+
+    .config-notice {
+      margin-top: 28px;
+      background: #111;
+      border: 1px dashed #2a2a2a;
+      border-radius: 6px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: #555;
+      line-height: 1.7;
+    }
+
+    .config-notice span { color: #c9a84c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="brand">S.E. Global</div>
+    <h1>Chat Capture</h1>
+
+    <div class="log" id="log">
+      <div class="log-empty" id="emptyState">No messages yet.</div>
+    </div>
+
+    <div class="input-row">
+      <input type="text" id="msg" placeholder="Type your message..." autocomplete="off" />
+      <button id="sendBtn" onclick="send()">SEND</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="config-notice">
+      Before deploying: replace <span>YOUR_SUPABASE_URL</span> and <span>YOUR_ANON_KEY</span> in the script below with your actual Supabase credentials.
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://jbhtlakyttznbkfwghor.supabase.co";
+    const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpiaHRsYWt5dHR6bmJrZndnaG9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NTg1MDYsImV4cCI6MjA5MTIzNDUwNn0.mPlzfKm8LIZEB4XwST1MaKC9NK4Zl4utDQO-nq28aPA";
+
+    const localLog = [];
+
+    function setStatus(msg, type) {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "status " + (type || "");
+    }
+
+    function renderLog() {
+      const log = document.getElementById("log");
+      const empty = document.getElementById("emptyState");
+
+      if (localLog.length === 0) {
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+
+      // Only append latest
+      const entry = localLog[localLog.length - 1];
+      const div = document.createElement("div");
+      div.className = "log-entry";
+      div.innerHTML = `${entry.text}<div class="meta">${entry.time}</div>`;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function send() {
+      const input = document.getElementById("msg");
+      const btn = document.getElementById("sendBtn");
+      const text = input.value.trim();
+
+      if (!text) { setStatus("Type something first.", "err"); return; }
+
+      btn.disabled = true;
+      setStatus("Saving...");
+
+      // Store locally for display
+      localLog.push({ text, time: new Date().toLocaleTimeString() });
+      renderLog();
+      input.value = "";
+
+      // Send to Supabase
+      if (SUPABASE_URL === "YOUR_SUPABASE_URL") {
+        setStatus("Saved locally. Add Supabase credentials to enable cloud storage.", "ok");
+        btn.disabled = false;
+        return;
+      }
+
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": ANON_KEY,
+            "Authorization": `Bearer ${ANON_KEY}`
+          },
+          body: JSON.stringify({ text })
+        });
+
+        if (res.ok) {
+          setStatus("Saved to database.", "ok");
+        } else {
+          const err = await res.json();
+          setStatus("Save failed: " + (err.message || res.status), "err");
+        }
+      } catch (e) {
+        setStatus("Network error. Check credentials.", "err");
+      }
+
+      btn.disabled = false;
+    }
+
+    document.getElementById("msg").addEventListener("keydown", e => {
+      if (e.key === "Enter") send();
+    });
+  </script>
+</body>
+</html>
